@@ -1,0 +1,11 @@
+# 数据与缓存（体积大，不入库）
+data/
+*.db
+*.pkl
+__pycache__/
+*.pyc
+
+# 本地环境
+.env
+.venv/
+venv/

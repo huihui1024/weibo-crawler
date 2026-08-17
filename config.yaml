@@ -1,0 +1,44 @@
+bloggers:
+  # 示例博主配置，请替换为实际的微博UID
+  # - uid: "1234567890"
+  #   nickname: "博主A"
+  #   interval: 30  # 采集间隔(分钟)
+  #   enabled: true
+  # - uid: "9876543210"
+  #   nickname: "博主B"
+  #   interval: 60
+  #   enabled: true
+
+crawler:
+  user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+  request_delay: 3  # 请求间隔秒数
+  timeout: 30  # 请求超时秒数
+  max_retries: 3  # 最大重试次数
+
+storage:
+  database: "data/weibo.db"
+  image_dir: "data/images"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+market:
+  enabled_markets:
+    - "A"
+    - "HK"
+    - "US"
+  default_market: "A"
+
+trading:
+  simulated_enabled: true
+  commission_rate: 0.0003
+  slippage: 0.001
+  initial_capital: 1000000
+
+# LLM配置（用于量化分析的实体提取）
+# 讯飞Coding Plan包 (OpenAI兼容接口)
+llm:
+  api_key: "YOUR_XFYUN_API_KEY"
+  base_url: "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"
+  model: "astron-code-latest"

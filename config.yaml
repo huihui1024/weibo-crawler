@@ -22,23 +22,3 @@ storage:
 server:
   host: "0.0.0.0"
   port: 8000
-
-market:
-  enabled_markets:
-    - "A"
-    - "HK"
-    - "US"
-  default_market: "A"
-
-trading:
-  simulated_enabled: true
-  commission_rate: 0.0003
-  slippage: 0.001
-  initial_capital: 1000000
-
-# LLM配置（用于量化分析的实体提取）
-# 讯飞Coding Plan包 (OpenAI兼容接口)
-llm:
-  api_key: "YOUR_XFYUN_API_KEY"
-  base_url: "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"
-  model: "astron-code-latest"

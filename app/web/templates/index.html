@@ -995,9 +995,6 @@
                 <i class="bi bi-wechat"></i> 微博博主内容抓取
             </a>
             <div class="d-flex align-items-center gap-3">
-                <a href="/stock" class="btn btn-outline-light btn-sm">
-                    <i class="bi bi-graph-up-arrow"></i> 智能选股
-                </a>
                 <button class="btn btn-outline-light btn-sm" onclick="showCookieModal()">
                     <i class="bi bi-cookie"></i> Cookie设置
                 </button>
@@ -1101,20 +1098,6 @@
             </div>
         </div>
 
-        <!-- 分析结果区块 - 按博主分列显示 -->
-        <div class="card" id="analysisCard">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background: #f1f8e9;">
-                <span><i class="bi bi-graph-up"></i>量化投研分析（按博主分类）</span>
-                <button class="btn btn-sm btn-outline-secondary" onclick="refreshAllAnalysis()">
-                    <i class="bi bi-arrow-clockwise"></i> 刷新全部分析
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="analysisColumns" class="row">
-                    <!-- 每个博主的分析结果将通过JS加载 -->
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- 添加博主模态框 -->
@@ -1388,9 +1371,6 @@
                                     <button class="btn btn-crawl btn-action" onclick="event.stopPropagation(); crawlOne(${item.blogger.id}, this)">
                                         <i class="bi bi-arrow-repeat"></i> 爬取
                                     </button>
-                                    <button class="btn btn-outline-success btn-action" onclick="event.stopPropagation(); analyzeBlogger(${item.blogger.id}, '${item.blogger.nickname || item.blogger.weibo_uid}')">
-                                        <i class="bi bi-graph-up"></i> 分析
-                                    </button>
                                     <button class="btn btn-outline-primary btn-action" onclick="event.stopPropagation(); showEditModal(${item.blogger.id}, '${item.blogger.nickname || ''}', ${item.blogger.crawl_interval}, ${item.blogger.enabled})">
                                         <i class="bi bi-pencil"></i>
                                     </button>
@@ -1413,15 +1393,6 @@
 
                 // 加载各博主的微博列
                 loadWeiboColumns(data.bloggers);
-
-                // 加载分析列
-                loadAnalysisColumns(data.bloggers);
-
-                // 加载各博主的分析
-                for (const item of data.bloggers) {
-                    const bloggerName = item.blogger.nickname || item.blogger.weibo_uid;
-                    loadOneAnalysis(item.blogger.id, bloggerName);
-                }
             } catch (error) {
                 console.error('加载博主失败:', error);
             }
@@ -1871,9 +1842,6 @@
                     updateCookieStatus(true, true);
                     showGlobalAlert('success', '爬取成功', `新增 ${data.new_count} 条微博`);
                     loadBloggers();
-
-                    // 自动分析该博主
-                    autoAnalyzeBlogger(id, bloggerName);
                 } else {
                     // 检查是否是Cookie错误
                     let errorMsg = data.detail || data.msg || '未知错误';
@@ -1938,16 +1906,7 @@
                     }
 
                     // 重新加载博主列表
-                    const bloggersData = await (await fetch('/api/bloggers')).json();
                     loadBloggers();
-
-                    // 如果有选中的博主，自动更新分析
-                    if (currentAnalysisBloggerId) {
-                        const blogger = bloggersData.bloggers.find(b => b.blogger.id == currentAnalysisBloggerId);
-                        if (blogger) {
-                            autoAnalyzeBlogger(blogger.blogger.id, blogger.blogger.nickname || blogger.blogger.weibo_uid);
-                        }
-                    }
                 } else {
                     let errorMsg = data.detail || data.msg || '未知错误';
                     if (typeof errorMsg === 'object') {
@@ -2243,292 +2202,6 @@
             }
         }
 
-        // 分析相关变量
-        let analysisCache = {};
-
-        // 加载分析列
-        function loadAnalysisColumns(bloggers) {
-            const container = document.getElementById('analysisColumns');
-
-            if (bloggers.length === 0) {
-                container.innerHTML = '<div class="col-12"><div class="text-center text-muted py-5"><i class="bi bi-graph-up" style="font-size: 48px;"></i><p class="mt-3">暂无博主，请先添加博主</p></div></div>';
-                return;
-            }
-
-            // 根据博主数量决定每行显示几个
-            let colClass = 'col-md-6 col-lg-4';
-            if (bloggers.length === 1) {
-                colClass = 'col-md-8 col-lg-6';
-            } else if (bloggers.length === 2) {
-                colClass = 'col-md-6';
-            }
-
-            // 创建各博主的分析列
-            let columnsHtml = '';
-            for (const item of bloggers) {
-                const bloggerId = item.blogger.id;
-                const bloggerName = item.blogger.nickname || item.blogger.weibo_uid;
-
-                columnsHtml += `
-                    <div class="${colClass}">
-                        <div class="analysis-column" id="analysis-col-${bloggerId}">
-                            <div class="analysis-column-header">
-                                <span>${bloggerName}</span>
-                                <button class="btn btn-sm btn-light" onclick="refreshOneAnalysis(${bloggerId}, '${bloggerName}')">
-                                    <i class="bi bi-arrow-clockwise"></i>
-                                </button>
-                            </div>
-                            <div class="analysis-column-content" id="analysis-content-${bloggerId}">
-                                <div class="loading-placeholder">
-                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                    <span class="ms-2">等待分析...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            container.innerHTML = columnsHtml;
-        }
-
-        // 加载单个博主的分析
-        async function loadOneAnalysis(bloggerId, bloggerName) {
-            const contentEl = document.getElementById(`analysis-content-${bloggerId}`);
-            if (!contentEl) return;
-
-            // 检查缓存
-            if (analysisCache[bloggerId]) {
-                renderAnalysisCard(analysisCache[bloggerId], bloggerId);
-                return;
-            }
-
-            contentEl.innerHTML = `
-                <div class="loading-placeholder">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <span class="ms-2">分析中...</span>
-                </div>
-            `;
-
-            try {
-                const response = await fetch(`/analyze/${bloggerId}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    analysisCache[bloggerId] = data;
-                    renderAnalysisCard(data, bloggerId);
-                } else {
-                    contentEl.innerHTML = `
-                        <div class="alert alert-warning py-2 small mb-0">
-                            <i class="bi bi-exclamation-triangle"></i> ${data.message || '暂无数据'}
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                contentEl.innerHTML = `
-                    <div class="alert alert-danger py-2 small mb-0">
-                        <i class="bi bi-x-circle"></i> 分析失败
-                    </div>
-                `;
-            }
-        }
-
-        // 渲染分析卡片内容 - 完全按照参考格式
-        function renderAnalysisCard(data, bloggerId) {
-            const contentEl = document.getElementById(`analysis-content-${bloggerId}`);
-            if (!contentEl) return;
-
-            let html = '';
-
-            // 顶部：核心画像与仓位
-            html += `<div class="analysis-profile">`;
-            html += `<div class="analysis-profile-left">`;
-            html += `<div class="profile-label">持仓画像</div>`;
-            html += `<div class="profile-value">`;
-            html += `<span class="market-tag">🌏 ${data.market_type || '未知市场'}</span>`;
-            html += `<span class="style-tag">🛡️ ${data.position_style || '未知风格'}</span>`;
-            html += `</div></div>`;
-            html += `<div class="analysis-profile-right">`;
-            html += `<div class="profile-label">仓位配置</div>`;
-            html += `<div class="profile-value">${data.position_config || '⚠️ 暂无明确数据'}</div>`;
-            html += `</div></div>`;
-
-            // 交易体系（紧凑双列）
-            html += `<div class="trading-grid">`;
-            html += `<div class="trading-item"><div class="item-label">⚡ 交易周期</div><div class="item-value">${data.trading_cycle_detail || data.trading_cycle || '未知'}</div></div>`;
-            html += `<div class="trading-item"><div class="item-label">📈 K线形态</div><div class="item-value">${data.k_pattern || '未设定'}</div></div>`;
-            html += `</div>`;
-
-            // 避雷区
-            if (data.avoid_stocks && data.avoid_stocks.length > 0) {
-                html += `<div class="avoid-zone">🚫 <b>避雷区：</b>${data.avoid_stocks.slice(0, 5).join('、')}</div>`;
-            }
-
-            // 可能持仓个股（看好）
-            if (data.likely_positions && data.likely_positions.length > 0) {
-                html += `<div class="likely-positions">`;
-                html += `<div class="section-label">📍 看好 / 可能持仓</div>`;
-                html += `<div class="position-list">`;
-                data.likely_positions.forEach(pos => {
-                    const scoreClass = pos.score >= 3 ? 'high-confidence' : (pos.score >= 2 ? 'medium-confidence' : 'low-confidence');
-                    html += `<div class="position-item ${scoreClass}">`;
-                    html += `<span class="pos-name">${pos.name}</span>`;
-                    if (pos.sector) html += `<span class="pos-sector">${pos.sector}</span>`;
-                    html += `<span class="pos-score" title="时序加权分数">${pos.score}分</span>`;
-                    if (pos.density_bonus && pos.density_bonus > 1.1) html += `<span class="pos-density" title="近期密集提及加成">⚡×${pos.density_bonus.toFixed(1)}</span>`;
-                    if (pos.consistency_bonus && pos.consistency_bonus > 1.1) html += `<span class="pos-consistency" title="立场一致加成">🎯×${pos.consistency_bonus.toFixed(1)}</span>`;
-                    if (pos.signal) html += `<span class="pos-signal">${pos.signal}</span>`;
-                    if (pos.latest_time) {
-                        html += `<span class="pos-time">${pos.latest_time.split(' ')[0]}</span>`;
-                    }
-                    html += `</div>`;
-                });
-                html += `</div>`;
-                html += `<div class="position-hint">💡 博主明确看好的个股</div>`;
-                html += `</div>`;
-            }
-
-            // 看空/已清仓
-            if (data.bearish_positions && data.bearish_positions.length > 0) {
-                html += `<div class="likely-positions" style="border-left: 3px solid #ff4d4f; padding-left: 8px;">`;
-                html += `<div class="section-label" style="color: #ff4d4f;">🔻 看空 / 已清仓</div>`;
-                html += `<div class="position-list">`;
-                data.bearish_positions.forEach(pos => {
-                    html += `<div class="position-item bearish-item">`;
-                    html += `<span class="pos-name" style="color: #ff4d4f;">${pos.name}</span>`;
-                    if (pos.sector) html += `<span class="pos-sector">${pos.sector}</span>`;
-                    html += `<span class="pos-score">${pos.score}分</span>`;
-                    if (pos.density_bonus && pos.density_bonus > 1.1) html += `<span class="pos-density" title="近期密集提及加成">⚡×${pos.density_bonus.toFixed(1)}</span>`;
-                    if (pos.signal) html += `<span class="pos-signal" style="color: #ff7875;">${pos.signal}</span>`;
-                    html += `</div>`;
-                });
-                html += `</div>`;
-                html += `</div>`;
-            }
-
-            // 仅讨论/提及
-            if (data.mentioned_positions && data.mentioned_positions.length > 0) {
-                html += `<div class="likely-positions" style="border-left: 3px solid #d9d9d9; padding-left: 8px;">`;
-                html += `<div class="section-label" style="color: #8c8c8c;">💬 仅讨论 / 提到</div>`;
-                html += `<div class="position-list">`;
-                data.mentioned_positions.forEach(pos => {
-                    html += `<div class="position-item neutral-item">`;
-                    html += `<span class="pos-name" style="color: #8c8c8c;">${pos.name}</span>`;
-                    if (pos.sector) html += `<span class="pos-sector" style="color: #bfbfbf;">${pos.sector}</span>`;
-                    html += `</div>`;
-                });
-                html += `</div>`;
-                html += `<div class="position-hint">💬 博主仅讨论，无明确看好看空</div>`;
-                html += `</div>`;
-            }
-
-            // 重仓板块（带sentiment标签）
-            if (data.hot_industries && data.hot_industries.length > 0) {
-                html += `<div class="hot-industries">`;
-                html += `<div class="section-label">🔥 重仓板块</div>`;
-                html += `<div class="industry-tags">`;
-                data.hot_industries.forEach(ind => {
-                    if (typeof ind === 'string') {
-                        html += `<span class="industry-tag">${ind}</span>`;
-                    } else {
-                        const tagClass = ind.sentiment === 'bullish' ? 'industry-tag-bullish' :
-                                         ind.sentiment === 'bearish' ? 'industry-tag-bearish' : 'industry-tag';
-                        const label = ind.sentiment === 'bullish' ? '看好' :
-                                     ind.sentiment === 'bearish' ? '看空' : '';
-                        html += `<span class="${tagClass}">${ind.name}${label ? ' · ' + label : ''}</span>`;
-                    }
-                });
-                html += `</div></div>`;
-            }
-
-            // 关注股票（美股 -> A股映射）- 移到重仓板块下面
-            if (data.watch_stocks && data.watch_stocks.length > 0) {
-                html += `<div class="watch-stocks">`;
-                html += `<div class="section-label">👀 关注未买入 (美股 -> A股映射)</div>`;
-                data.watch_stocks.forEach(item => {
-                    html += `<div class="watch-stock-row">`;
-                    html += `<span class="stock-name">${item.us_stock} (${item.count})</span>`;
-                    html += `<span class="stock-mapping">${item.a_stocks}</span>`;
-                    html += `</div>`;
-                });
-                html += `</div>`;
-            }
-
-            // 选股体系与权重（移到重仓板块下面）
-            html += `<div class="selection-factors">`;
-            html += `<div class="section-label">🎯 选股体系与权重</div>`;
-            if (data.selection_factors && Object.keys(data.selection_factors).length > 0) {
-                const total = Object.values(data.selection_factors).reduce((a, b) => a + b, 0);
-                Object.entries(data.selection_factors).slice(0, 5).forEach(([factor, score]) => {
-                    const pct = Math.round(score / total * 100);
-                    html += `<div class="factor-bar">`;
-                    html += `<span class="factor-name">${factor}</span>`;
-                    html += `<div class="bar-bg"><div class="bar-fill" style="width: ${pct}%"></div></div>`;
-                    html += `<span>${pct}%</span>`;
-                    html += `</div>`;
-                });
-            } else {
-                html += `<div style="font-size: 12px; color: #999;">暂无选股因子数据</div>`;
-            }
-            if (data.selection_formula) {
-                html += `<div class="selection-formula">💡 <b>口诀：</b>${data.selection_formula}</div>`;
-            }
-            html += `</div>`;
-
-            // 纪律评分
-            const score = data.discipline_score || 0;
-            let scoreClass = 'score-low';
-            if (score >= 70) scoreClass = 'score-high';
-            else if (score >= 50) scoreClass = 'score-medium';
-
-            html += `<div class="discipline-section">`;
-            html += `<span class="discipline-label">📊 纪律评分</span>`;
-            html += `<span class="score-badge ${scoreClass}">${score}/100</span>`;
-            html += `</div>`;
-
-            // 常见错误
-            if (data.common_mistakes && data.common_mistakes.length > 0) {
-                html += `<div style="margin-top: 8px;"><span style="font-size: 11px; color: #999;">⚠️ 常犯错误：</span>`;
-                html += `<div class="mistake-tags">`;
-                data.common_mistakes.forEach(m => {
-                    html += `<span class="mistake-tag">${m}</span>`;
-                });
-                html += `</div></div>`;
-            }
-
-            contentEl.innerHTML = html;
-        }
-
-        // 刷新单个博主分析
-        async function refreshOneAnalysis(bloggerId, bloggerName) {
-            delete analysisCache[bloggerId];
-            await loadOneAnalysis(bloggerId, bloggerName);
-        }
-
-        // 刷新全部分析
-        async function refreshAllAnalysis() {
-            analysisCache = {};
-            const response = await fetch('/api/bloggers');
-            const data = await response.json();
-            for (const item of data.bloggers) {
-                const bloggerName = item.blogger.nickname || item.blogger.weibo_uid;
-                loadOneAnalysis(item.blogger.id, bloggerName);
-            }
-        }
-
-        // 自动分析指定博主（爬取后调用）
-        async function autoAnalyzeBlogger(bloggerId, bloggerName) {
-            delete analysisCache[bloggerId];
-            await loadOneAnalysis(bloggerId, bloggerName);
-        }
-
-        // 分析博主（从博主管理点击分析按钮）
-        async function analyzeBlogger(id, name) {
-            delete analysisCache[id];
-            await loadOneAnalysis(id, name);
-            // 滚动到分析卡片
-            document.getElementById('analysisCard').scrollIntoView({ behavior: 'smooth' });
-        }
     </script>
 </body>
 </html>

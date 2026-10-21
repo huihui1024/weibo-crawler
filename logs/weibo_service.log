@@ -1,0 +1,11 @@
+INFO:     Started server process [238082]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+从数据库加载Cookie，长度: 554
+调度器已启动
+已初始化 3 个博主的定时任务
+INFO:     127.0.0.1:52722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52738 - "GET /api/search?keyword=%E5%9B%9E%E8%B4%AD&limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52748 - "GET /api/bloggers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52764 - "GET /stock HTTP/1.1" 404 Not Found

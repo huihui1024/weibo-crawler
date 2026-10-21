@@ -32,25 +32,11 @@ class ServerConfig(BaseModel):
     port: int = 8000
 
 
-class MarketConfig(BaseModel):
-    enabled_markets: List[str] = ["A", "HK", "US"]
-    default_market: str = "A"
-
-
-class TradingConfig(BaseModel):
-    simulated_enabled: bool = True
-    commission_rate: float = 0.0003
-    slippage: float = 0.001
-    initial_capital: float = 1000000
-
-
 class AppConfig(BaseModel):
     bloggers: List[BloggerConfig] = []
     crawler: CrawlerConfig = CrawlerConfig()
     storage: StorageConfig = StorageConfig()
     server: ServerConfig = ServerConfig()
-    market: MarketConfig = MarketConfig()
-    trading: TradingConfig = TradingConfig()
 
 
 _config: Optional[AppConfig] = None
